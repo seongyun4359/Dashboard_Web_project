@@ -1,0 +1,62 @@
+.circlemap-root {
+  display: flex;
+  flex-direction: column;
+}
+
+.circlemap-title {
+  font-size: 18px;
+  margin-top: 20px;
+  height: 35px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.circlemap-content {
+  flex-grow: 1;
+  padding: 5px;
+  box-sizing: border-box;
+}
+
+.circlemap {
+  height: 95%;
+  width: 99%;
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+  padding: 5px 1px;
+  box-shadow : 0 2px 10px 1px rgba(0,0,0,.2);
+  background-color: white;
+  border: 2px solid white;  /* 테두리 두께와 색상 설정 */
+  border-radius: 5px;
+}
+
+.circlemap-chart {
+  height: 95%;
+  width: 99%;
+  display: flex;
+  padding-left: 5px;
+  padding: 5px;
+}
+
+.side {
+  width: 60px;
+  display: grid;
+  height: calc((100vh - 60px) / 2 - 80px);
+}
+
+.circlemap-start {
+  display: grid;
+  height: calc((100vh - 60px) / 2 - 80px);
+}
+
+.bridge-container {
+  position: relative;
+  flex-grow: 1;
+  height: calc((100vh - 60px) / 2 - 80px);
+}
+
+.circlemap-label {
+  width: 10px;
+  height: 10px;
+}

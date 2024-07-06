@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Change in disposable product usage </title>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div style="width: 80%; margin: auto;">
+    <canvas id="changeChart"></canvas>
+  </div>
+
+  <script>
+    // 차트 데이터
+    const years = [2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020];
+    const changeData = [16949.9, 17702.1, 18214.2, 18518.9, 18252.0, 17665.0, 17828.0, 18376.0, 19006.0, 18581.0, 17943.0, 17861.0, 17881.0, 17786.0, 18219.0, 18705.0, 19627.0, 19523.7, 20452.9, 21155.9, 22544.6];
+
+    // Chart.js를 사용하여 꺾은 선 그래프 생성
+    const ctx = document.getElementById('changeChart').getContext('2d');
+    const changeChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: years,
+        datasets: [{
+          label: '한국 일회용품 사용량',
+          data: changeData,
+          borderColor: 'rgba(75, 192, 192, 1)', // 선 색상 설정
+          borderWidth: 2,
+          fill: false, // 선 아래를 채우지 않음
+          pointBackgroundColor: 'red', // 최근 데이터 점 색상
+          pointRadius: function(context) {
+            // 최근 데이터 점 크기 설정
+            return context.dataIndex === changeData.length - 1 ? 6 : 3;
+          },
+        }]
+      },
+      options: {
+        scales: {
+          x: {
+            type: 'linear', // x 축은 연도로 설정
+            position: 'bottom',
+            title: {
+              display: true,
+              text: 'Year'
+            }
+          },
+          y: {
+            beginAtZero: true, // Start the y-axis from 0
+            max: Math.ceil(Math.max(...changeData) / 1000) * 1000, // Round up to the nearest thousand
+            stepSize: 1000, // Set the y-axis step size to 1000
+            title: {
+              display: true,
+              text: '한국 일회용품 사용량'
+            }
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>

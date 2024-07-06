@@ -1,0 +1,12 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;500&display=swap');
+
+
+/* 나머지 스타일 코드 */
+body {
+  margin: 0;
+  font-family: 'Noto Sans KR', sans-serif;
+}
+
+code {
+  font-family: 'Noto Sans KR', sans-serif;
+}

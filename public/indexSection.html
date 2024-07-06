@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <style>
+        /* Add your styles here */
+
+        #chartContainer {
+            width: 80;
+            height: 400px;
+            left: 0;
+            bottom: 0;
+            padding-left: 50px; /* hr_tittle 요소와 같은 여백 추가 */
+        }
+        
+        #chartContainer canvas {
+            height: 400px;
+        }
+
+        #hr_tittle {
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+
+        #map {
+            margin-top: 70px;
+            position: relative;
+            margin-bottom: 2px; /* 꺾은선 그래프와 겹치지 않도록 여백 추가 */
+            
+        }
+
+
+        /* 툴팁 스타일 */
+        #tooltip {
+            font-family: 'Noto Sans KR', sans-serif;
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+            background-color: white;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 12px;
+            white-space: nowrap; /* 툴팁 텍스트가 한 줄에 나타나도록 함 */
+            
+        }
+
+        #changeChart {
+        border: 2px solid white;  /* 테두리 두께와 색상 설정 */
+        border-radius: 5px;
+        box-shadow : 0 2px 10px 1px rgba(0,0,0,.2);
+        }
+
+        #barChart {
+        border: 2px solid white;  /* 테두리 두께와 색상 설정 */
+        border-radius: 5px;
+        box-shadow : 0 2px 10px 1px rgba(0,0,0,.2);
+        }
+
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500&display=swap" rel="stylesheet"> 
+
+
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="https://unpkg.com/topojson-client@3"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <div width="300px" style="margin-left: 30px; margin-top: 50px;">
+        <div id="hr_tittle" size="7x" color="#A9C9F7" style="margin-left: 40px; width: 60%; position: absolute; left: 0px; top: 10px;">
+            <p style="text-align: center; margin: 15px 0; font-family: 'Noto Sans KR', sans-serif; font-size: 19px;">세계 OECD 국가별 일회용품 배출량(톤)</p>
+        </div>
+        <div id="map"></div>
+    </div>
+
+    <div id="tooltip"></div>
+
+    <!-- Chart container -->
+    <div id="chartContainer">
+        <div style="display: inline-block; width: 52%; height: 400px; position: relative; left: -20px;">
+            <canvas id="changeChart" width="400" height="200"></canvas>
+        </div>
+        <div style="display: inline-block; width: 45%; height: 400px;">
+            <canvas id="barChart" width="400" height="230" ;></canvas>
+        </div>
+    </div>
+
+    <script>
+        // Get the width of hr_tittle element
+        var hrTittleWidth = document.getElementById("hr_tittle").offsetWidth;
+
+        var width = hrTittleWidth; // Set the map width to hr_tittle width
+        var height = width * 455 / 962*1.1 //window.innerHeight * 0.5;
+        var chartContainerWidth = hrTittleWidth; // Set the chart container width to hr_tittle width / 2
+        var chartContainerHeight = window.innerHeight * 0.5;
+
+        var chartContainer = d3.select("#chartContainer")
+        .style("width", chartContainerWidth + "px")
+        .style("height", chartContainerHeight + "px");
+
+        var mapSVG = d3.select("#map").append("svg")
+            .attr("width", width)
+            .attr("height", height*1.2)
+            .attr("class", "map");
+
+        // filter 정의(map뒤에 그림자)
+        var defs = mapSVG.append("defs");
+        var filter = defs.append("filter")
+            .attr("id", "drop-shadow")
+            .attr("height", "100%");
+
+        filter.append("feGaussianBlur")
+            .attr("in", "SourceAlpha")
+            .attr("stdDeviation", 8)
+            .attr("result", "blur");
+
+        filter.append("feComponentTransfer")
+            .append("feFuncA")
+            .attr("type", "linear")
+            .attr("slope", 0.2); // 0과 1 사이의 값을 설정하여 투명도를 조절
+            
+
+        filter.append("feOffset")
+            .attr("dx", 0)
+            .attr("dy", 0)
+            .attr("result", "offsetBlur");
+
+            
+
+        var feMerge = filter.append("feMerge");
+        feMerge.append("feMergeNode").attr("in", "offsetBlur");
+        feMerge.append("feMergeNode").attr("in", "SourceGraphic");        
+        
+        mapSVG.style("filter", "url(#drop-shadow)");
+
+        const borderSize = 4;   // 테두리의 크기
+        mapSVG.append("rect")  // 테두리를 위해 <rect> 요소를 추가
+            .attr("width", width)
+            .attr("height", height)
+            .attr("rx", 10)   // 둥근 모서리의 수평 반지름을 설정
+            .attr("ry", 10)   // 둥근 모서리의 수직 반지름을 설정
+            .style("fill", "white")  
+            .style("stroke", "white")  
+            .style("stroke-width", borderSize)
+            .attr("transform", "translate(2," + 2 + ")");
+            
+            
+        // 아래로 이동시키는 translate 값 설정
+        var translateY = height / 1.55;
+
+        var mapProjection = d3.geoMercator()
+            .fitSize([width, height], { type: "Sphere" })
+            .translate([width / 2.1, translateY]) // translateY 값으로 아래로 이동
+            .scale(118); 
+
+        var mapPath = d3.geoPath()
+            .projection(mapProjection);
+
+        var mapG = mapSVG.append("g");
+
+        // 툴팁 요소 선택
+        var tooltip = d3.select("#tooltip");
+
+        let selectedCountryData;
+        const years = [2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020];
+        const ctx = document.getElementById('changeChart').getContext('2d');
+        // 캔버스의 배경색을 화이트로 설정
+        ctx.canvas.style.backgroundColor = 'white';
+        
+
+        let changeChart;    
+        const countriesData = {
+            "독일": [0.629, 0.620, 0.628, 0.591, 0.578, 0.555, 0.554, 0.570, 0.576, 0.577, 0.587, 0.599, 0.593, 0.591, 0.609, 0.616, 0.619, 0.615, 0.600, 0.603, 0.635]
+,
+            "일본": [0.445, 0.443, 0.439, 0.439, 0.432, 0.427, 0.42, 0.411, 0.39, 0.374, 0.368, 0.368, 0.366, 0.363, 0.36, 0.354, 0.352, 0.35, 0.35, 0.338, 0.330]
+,
+            "프랑스": [0.483, 0.496, 0.505, 0.485, 0.502, 0.515, 0.525, 0.535, 0.533, 0.532, 0.535, 0.537, 0.533, 0.529, 0.530, 0.532, 0.570, 0.576, 0.576, 0.577, 0.562]
+,
+            "터키": [0.358, 0.364, 0.363, 0.364, 0.348, 0.367, 0.353, 0.355, 0.333, 0.354, 0.348, 0.361, 0.360, 0.363, 0.364, 0.365, 0.395, 0.400, 0.405, 0.410, 0.405]
+,
+            "영국": [0.501, 0.515, 0.524, 0.520, 0.533, 0.518, 0.523, 0.513, 0.493, 0.480, 0.472, 0.458, 0.448, 0.455, 0.459, 0.464, 0.467, 0.455, 0.453, 0.452, 0.456]
+,
+            "이탈리아": [0.492, 0.500, 0.507, 0.511, 0.529, 0.538, 0.552, 0.552, 0.551, 0.547, 0.552, 0.534, 0.509, 0.502, 0.503, 0.501, 0.513, 0.502, 0.514, 0.511, 0.492]
+,
+            "한국": [0.397, 0.411, 0.422, 0.427, 0.422, 0.411, 0.414, 0.425, 0.437, 0.428, 0.417, 0.416, 0.417, 0.415, 0.422, 0.431, 0.45, 0.448, 0.464, 0.479, 0.505]
+,
+            "스페인": [0.558, 0.560, 0.556, 0.574, 0.541, 0.540, 0.552, 0.550, 0.532, 0.529, 0.501, 0.477, 0.461, 0.446, 0.439, 0.445, 0.451, 0.464, 0.468, 0.469, 0.464]
+,
+            "폴란드": [0.323, 0.294, 0.278, 0.263, 0.258, 0.321, 0.323, 0.324, 0.322, 0.319, 0.318, 0.321, 0.320, 0.299, 0.273, 0.287, 0.309, 0.316, 0.330, 0.337, 0.347]
+,
+            "네덜란드": [0.539, 0.540, 0.547, 0.537, 0.550, 0.551, 0.551, 0.560, 0.556, 0.549, 0.536, 0.536, 0.520, 0.499, 0.503, 0.501, 0.501, 0.493, 0.494, 0.494, 0.525]
+,
+            "벨기에": [0.417, 0.415, 0.430, 0.416, 0.437, 0.436, 0.442, 0.453, 0.444, 0.436, 0.429, 0.434, 0.425, 0.420, 0.411, 0.401, 0.410, 0.404, 0.404, 0.413, 0.527]
+,
+            "오스트리아": [0.519, 0.518, 0.549, 0.551, 0.524, 0.530, 0.552, 0.554, 0.559, 0.550, 0.526, 0.538, 0.546, 0.548, 0.540, 0.540, 0.552, 0.564, 0.573, 0.583, 0.632]
+,
+            "스위스": [0.545, 0.553, 0.568, 0.565, 0.563, 0.569, 0.614, 0.629, 0.651, 0.628, 0.641, 0.631, 0.643, 0.660, 0.692, 0.695, 0.697, 0.688, 0.692, 0.701, 0.703]
+,
+            "이스라엘": [0.423, 0.384, 0.411, 0.410, 0.425, 0.436, 0.451, 0.459, 0.474, 0.486, 0.493, 0.507, 0.517, 0.520, 0.528, 0.542, 0.561, 0.580, 0.604, 0.615, 0.637]
+,
+            "멕시코": [0.239, 0.245, 0.250, 0.256, 0.269, 0.276, 0.282, 0.288, 0.295, 0.299, 0.312, 0.320, 0.328, 0.328, 0.336, 0.335, 0.348, 0.358, 0.380, 0.396, 0.414]
+,
+            "미국": [0.650, 0.642, 0.654, 0.656, 0.677, 0.677, 0.686, 0.685, 0.675, 0.653, 0.669, 0.672, 0.673, 0.681, 0.690, 0.699, 0.716, 0.717, 0.779, 0.846, 0.897]
+,
+            "페루": [0.154, 0.160, 0.161, 0.171, 0.175, 0.179, 0.185, 0.187, 0.188, 0.189, 0.189, 0.193, 0.194, 0.200, 0.202, 0.203, 0.206, 0.208, 0.217, 0.227, 0.230]
+,
+            "칠레": [0.230, 0.229, 0.236, 0.244, 0.252, 0.260, 0.273, 0.279, 0.286, 0.294, 0.302, 0.312, 0.325, 0.334, 0.352, 0.369, 0.397, 0.434, 0.444, 0.462, 0.468]
+,
+            "아르헨티나": [0.241, 0.249, 0.258, 0.262, 0.273, 0.294, 0.303, 0.311, 0.313, 0.325, 0.345, 0.363, 0.371, 0.376, 0.367, 0.377, 0.406, 0.416, 0.429, 0.453, 0.469]
+,
+            "러시아": [0.365, 0.366, 0.366, 0.367, 0.368, 0.368, 0.367, 0.368, 0.369, 0.369, 0.371, 0.376, 0.381, 0.385, 0.388, 0.394, 0.398, 0.402, 0.398, 0.404, 0.409]
+,
+            "중국":  [0.317, 0.324, 0.325, 0.329, 0.334, 0.343, 0.357, 0.369, 0.373, 0.38, 0.387, 0.394, 0.388, 0.391, 0.396, 0.397, 0.405, 0.409, 0.413, 0.421, 0.428]
+
+,
+            "캐나다": [0.455, 0.494, 0.432, 0.421, 0.447, 0.496, 0.519, 0.527, 0.531, 0.461, 0.459, 0.473, 0.493, 0.512, 0.516, 0.540, 0.500, 0.512, 0.548, 0.576, 0.504]
+
+
+          };
+          
+          const inputData = [
+          {"OECD": "독일", "인지": 54.1, "인지X": 27.2, "잘 모르거나 무응답": 18.7},
+          {"OECD": "일본", "인지": 62, "인지X": 17.2, "잘 모르거나 무응답": 20.8},
+          {"OECD": "프랑스", "인지": 54.8, "인지X": 28.3, "잘 모르거나 무응답": 16.9},
+          {"OECD": "터키", "인지": 65.9, "인지X": 20, "잘 모르거나 무응답": 14.1},
+          {"OECD": "영국", "인지": 58.4, "인지X": 19.5, "잘 모르거나 무응답": 22.1},
+          {"OECD": "이탈리아", "인지": 66.7, "인지X": 12.2, "잘 모르거나 무응답": 21.1},
+          {"OECD": "한국", "인지": 62.3, "인지X": 11.2, "잘 모르거나 무응답": 24.9},
+          {"OECD": "스페인", "인지": 69.2, "인지X": 10.9, "잘 모르거나 무응답": 19.9},
+          {"OECD": "폴란드", "인지": 63.8, "인지X": 13.3, "잘 모르거나 무응답": 22.9},
+          {"OECD": "네덜란드", "인지": 61.1, "인지X": 11.1, "잘 모르거나 무응답": 17.8},
+          {"OECD": "벨기에", "인지": 66.2, "인지X": 16.6, "잘 모르거나 무응답": 17.2},
+          {"OECD": "오스트리아", "인지": 58.9, "인지X": 17.8, "잘 모르거나 무응답": 23.3},
+          {"OECD": "스위스", "인지": 55.6, "인지X": 26.4, "잘 모르거나 무응답": 18},
+          {"OECD": "이스라엘", "인지": 60.6, "인지X": 24.4, "잘 모르거나 무응답": 15},
+          {"OECD": "멕시코", "인지": 68.8, "인지X": 15.3, "잘 모르거나 무응답": 15.9},
+          {"OECD": "미국", "인지": 55.9, "인지X": 18.1, "잘 모르거나 무응답": 26},
+          {"OECD": "페루", "인지": 58.4, "인지X": 19.5, "잘 모르거나 무응답": 22.1},
+          {"OECD": "칠레", "인지": 70.9, "인지X": 15.6, "잘 모르거나 무응답": 13.5},
+          {"OECD": "아르헨티나", "인지": 65.7, "인지X": 20.4, "잘 모르거나 무응답": 13.9},
+          {"OECD": "러시아", "인지": 59, "인지X": 20.7, "잘 모르거나 무응답": 19.3},
+          {"OECD": "중국", "인지": 50.1, "인지X": 26.1, "잘 모르거나 무응답": 23.8},
+          {"OECD": "캐나다", "인지": 64.1, "인지X": 22.2, "잘 모르거나 무응답": 13.7}
+      ];
+        // 전역 변수로 이전에 클릭한 요소를 저장할 변수 선언
+        let previousClickedElement = null;
+        // 지도 데이터 로딩
+        d3.json("https://unpkg.com/world-atlas@1/world/110m.json", function (error, data) {
+            if (error) throw error;
+
+            var features = topojson.feature(data, data.objects.countries).features;
+
+            mapG.selectAll("path")
+                .data(features)
+                .enter()
+                .append("path")
+                .attr("d", mapPath)
+                .attr("fill", "#F1EBDF");
+
+            // 데이터 입력
+            var chartData = [
+                {
+                    "OECD": "독일",
+                    "latitude": 51.1657,
+                    "longitude": 10.4515,
+                    "2020": 53322.0
+                },
+                {
+                    "OECD": "일본",
+                    "latitude": 36.2048,
+                    "longitude": 138.2529,
+                    "2020": 41669.0
+                },
+                {
+                    "OECD": "프랑스",
+                    "latitude": 46.6035,
+                    "longitude": 1.8883,
+                    "2020": 36370.0
+                },
+                {
+                    "OECD": "터키",
+                    "latitude": 38.9637,
+                    "longitude": 35.2433,
+                    "2020": 34581.0
+                },
+                {
+                    "OECD": "영국",
+                    "latitude": 55.3781,
+                    "longitude": -3.4360,
+                    "2020": 31002.0
+                },
+                {
+                    "OECD": "이탈리아",
+                    "latitude": 41.8719,
+                    "longitude": 12.5674,
+                    "2020": 28945.0
+                },
+                {
+                    "OECD": "한국",
+                    "latitude": 35.9078,
+                    "longitude": 127.7669,
+                    "2020": 22544.6
+                },
+                {
+                    "OECD": "스페인",
+                    "latitude": 40.4637,
+                    "longitude": -3.7492,
+                    "2020": 21989.0
+                },
+                {
+                    "OECD": "폴란드",
+                    "latitude": 51.9194,
+                    "longitude": 19.1451,
+                    "2020": 13117.0
+                },
+                {
+                    "OECD": "네덜란드",
+                    "latitude": 52.3676,
+                    "longitude": 4.9041,
+                    "2020": 9304.0
+                },
+                {
+                    "OECD": "벨기에",
+                    "latitude": 50.8503,
+                    "longitude": 4.3517,
+                    "2020": 8408.0
+                },
+                {
+                    "OECD": "오스트리아",
+                    "latitude": 47.5162,
+                    "longitude": 14.5501,
+                    "2020": 7438.0
+                },
+                {
+                    "OECD": "스위스",
+                    "latitude": 46.8182,
+                    "longitude": 8.2275,
+                    "2020": 6096.0
+                },
+                {
+                    "OECD": "멕시코",
+                    "latitude": 23.6345,
+                    "longitude": -102.5528,
+                    "2020": 53062.0
+                },
+                {
+                    "OECD": "미국",
+                    "latitude": 37.0902,
+                    "longitude": -95.7129,
+                    "2020": 305225.0
+                },
+                {
+                    "OECD": "페루",
+                    "latitude": -9.1900,
+                    "longitude": -75.0152,
+                    "2020": 7905.1
+                },
+                {
+                    "OECD": "이스라엘",
+                    "latitude": 31.0461,
+                    "longitude": 34.8516,
+                    "2020": 5976.0
+                },
+                {
+                    "OECD": "칠레",
+                    "latitude": -35.6751,
+                    "longitude": -71.5430,
+                    "2020": 9197.0 
+                },
+                {
+                    "OECD": "아르헨티나",
+                    "latitude": -38.4161,
+                    "longitude": -63.6167,
+                    "2020": 21571.0
+                },
+                {
+                    "OECD": "러시아",
+                    "latitude": 61.5240,
+                    "longitude": 105.3188,
+                    "2020": 58975.0
+                },
+                {
+                    "OECD": "중국",
+                    "latitude": 35.8617,
+                    "longitude": 104.1954,
+                    "2020": 325785.0
+                },
+                {
+                    "OECD": "캐나다",
+                    "latitude": 56.1304,
+                    "longitude": -106.3468,
+                    "2020": 75345.0 
+                }
+            ];
+
+            // 국가 위치 확인용 원 그리기
+            var radiusScale = d3.scaleSqrt()
+            .domain([0, d3.max(chartData, function (d) { return d["2020"]; })])
+            .range([5, 20]); // Adjust the range for the desired circle sizes
+
+            mapSVG.selectAll("circle")
+            .data(chartData)
+            .enter()
+            .append("circle")
+            .attr("cx", function (d) {
+                return mapProjection([d.longitude, d.latitude])[0];
+            })
+            .attr("cy", function (d) {
+                return mapProjection([d.longitude, d.latitude])[1];
+            })
+            .attr("r", function (d) {
+                return radiusScale(d["2020"]);
+            })
+            .attr("fill", "#775C31")
+            .attr("fill-opacity", 0.7)
+            .on("mouseover", function (d) {
+                d3.select(this)
+                    .attr("fill-opacity", 1);
+
+        tooltip.transition()
+            .duration(200)
+            .style("opacity", 1);
+        tooltip.html("<strong>" + d["OECD"] + "</strong><br>" + "배출량: " + d["2020"])
+            .style("left", (mapProjection([d.longitude, d.latitude])[0] -5) + "px")
+            .style("top", (mapProjection([d.longitude, d.latitude])[1] - radiusScale(d["2020"]) -0.5) + "px");
+    })
+    .on("mouseout", function () {
+        d3.select(this)
+            .attr("fill-opacity", 0.7);
+
+        tooltip.transition()
+            .duration(200)
+            .style("opacity", 0);
+    })
+    
+
+    // 클릭 이벤트 
+    .on("click", function (d) {
+        const selectedCountryData = countriesData[d["OECD"]];
+        const selectedCountry = inputData.find(country => country["OECD"] === d["OECD"]);
+        updateLineChart(selectedCountryData);
+        updateBarChart(selectedCountry);
+
+        // 이전에 클릭한 요소의 색상을 원래대로 돌리기
+        if (previousClickedElement) {
+            d3.select(previousClickedElement)
+                .style("fill", "#775C31") // 원래의 색상으로 변경
+                .style("fill-opacity", 0.7); //원래의 투명도로 변경
+        }
+
+    // 클릭된 요소의 색상 변경
+    d3.select(this)
+        .style("fill", "#ED7527") // 클릭 시 색상 변경 (혹은 # )
+        .style("fill-opacity", 1); //투명도 삭제
+
+    // 현재 클릭한 요소를 이전에 클릭한 요소로 저장
+    previousClickedElement = this;
+    });
+    
+
+    function initLineChart(initialCountryData) {
+    const lastIndex = 20;
+
+    changeChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: years,
+            datasets: [{
+                label: '1인당 일회용품 사용량(kg)',
+                data: initialCountryData,
+                borderColor: '#775C31',
+                borderWidth: 2,
+                fill: false,
+                pointBackgroundColor: function (context) {
+                    return context.dataIndex === lastIndex ? '#f44708' : 'gray';
+                },
+                borderColor: function (context) {
+                    return context.dataIndex === lastIndex ? '#555555' : 'gray';
+                },
+                pointRadius: function (context) {
+                    return context.dataIndex === lastIndex ? 5 : 1;
+                }
+
+            }]
+        },
+        options: {
+            scales: {
+                x: {
+                    type: 'linear',
+                    position: 'bottom',
+                    title: {
+                        display: true,
+                        text: '년도'
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    // y축 설정
+                    title: {
+                        display: true,
+                        text: '1인당 일회용품 사용량'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    labels: {
+                        font: {
+                            family: 'Noto Sans KR', // 원하는 글꼴로 변경
+                            size: 15 // 원하는 글꼴 크기로 변경
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+        function updateLineChart(countryData) {
+        changeChart.data.datasets[0].data = countryData;
+        changeChart.update();
+        }
+        
+        function updateBarChart(countryData) {
+            barChart.data.datasets[0].data = [countryData["인지"]];
+            barChart.data.datasets[1].data = [countryData["잘 모르거나 무응답"]];
+            barChart.data.datasets[2].data = [countryData["인지X"]];
+            barChart.update();
+        }
+
+        // 초기에 한 국가의 데이터로 그래프를 초기화합니다.
+        initLineChart();
+            
+        });
+
+        // 막대 그래프 데이터
+        var barData = {
+            labels: [""],
+            datasets: [
+            {
+                    label: "인지",
+                    data: [],
+                    backgroundColor: "#6FA5EF",
+                    barThickness: 100
+                },
+                {
+                    label: "의견없음",
+                    data: [],
+                    backgroundColor: "#F8D360",  
+                    barThickness: 100
+                },
+                {
+                    label: "모름",
+                    data: [],
+                    backgroundColor: "#DC4D3F",
+                    barThickness: 100
+                },
+            ]
+        };
+
+        // 막대 그래프 설정
+        var barOptions = {
+            scales: {
+                x: {
+                    stacked: true,
+                },
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    max: 100
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        font: {
+                            family: 'Noto Sans KR'
+                        }
+                    }
+                },
+                title: {
+                    display: true,
+                    text: '일회용품 사용에 대한 심각성 인지 설문조사', // 제목 추가
+                    font: {
+                        family: 'Noto Sans KR', // 폰트 설정
+                        size: 15,
+                        weight: 'normal'
+                    }
+                }
+            }
+        };
+           
+        var barCtx = document.getElementById("barChart").getContext("2d");
+        // 캔버스의 배경색을 화이트로 설정
+        barCtx.canvas.style.backgroundColor = 'white';
+        barChart = new Chart(barCtx, {
+            type: 'bar',
+            data: barData,
+            options: barOptions
+        });
+        
+
+
+    </script>
+</body>
+
+</html>
